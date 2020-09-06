@@ -1,10 +1,12 @@
 // TODO: this is a mess and a few things need to be reasoned about. For example:
-// 1) -> is not actually infix right now and should be
+// 1) -> is not actually infix right now and should be (it's probably reasonably
+//    faked and I can't contrive an example where this lack is noticable)
 // 2) the objects make no sense
 // 3) how to even attempt higher inductive types?
 // 4) is it enough just to ask if a constructor is referring to sections?
 // 5) there is no notion of constructor arity. Does this even matter?
 // 6) please beat me up with a JS style guide. I know I should be punished.
+// 7) should equality types be a third kind of former for the vizualizations
 var AgdaParsing = function (utils) {
     // Given the tokens, a starting point that is where an opening
     // bracket is, an end index, and the bracket format (ie. '()'),
@@ -24,7 +26,7 @@ var AgdaParsing = function (utils) {
     
     var AdgaTypeFormers = function() {
 	var formers = {"fn": true, "→": true, "prod": false, "pair": false};
-	var AgdaTypeFormer = function(constructor, is_sections) {
+	var AgdaTypeFormer = function(constructor, is_sections, args) {
 	    this.constructor = constructor;
 	    this.is_sections = is_sections;
 	    this.args = args;
@@ -43,9 +45,8 @@ var AgdaParsing = function (utils) {
 	};
     }();
 
-    var AgdaTypeDecl = function(name, top_level_toks, err_cbk){
+    var AgdaTypeDecl = function(name, top_level_toks){
 	this.name = name;
-	this.hidden = false;
 
 	// a utility to parse the top_level_toks.
 	// the grammar is expected to be something like (with [ acting as (
@@ -54,7 +55,7 @@ var AgdaParsing = function (utils) {
 	// { <identifiers> : <top_level_toks> } (-> <top_level_toks>)*
 	// <ctor>
 	// where ctor = Constructor <args>*
-	//       args = <identifier> | (<ctor>)
+	//       args = <identifier> | (<top_level_toks>)
 	var parseDecl = function(top_level_toks, start, end){
 	    var ctor = function(tokens, start, end) {
 		var name = tokens[start];
@@ -66,7 +67,7 @@ var AgdaParsing = function (utils) {
 			continue;
 		    }
 		    var new_i = indexOfMatchingParen(tokens, i, end, '()');
-		    args.push(ctor(tokens, i + 1, new_i));
+		    args.push(parseDecl(tokens, i + 1, new_i));
 		    i = new_i;
 		}
 		return AdgaTypeFormers.try_to_make(name, args);
@@ -115,6 +116,8 @@ var AgdaParsing = function (utils) {
 	this.parameters = parseDecl(top_level_toks, 0, top_level_toks.length);
     }
 
+    // data ctor_rval = Either Error AdgaTypeFormer
+    // string -> Map string [Either ctor_rval [Map string ctor_rval]]
     var getTopLevelDefs = function(agda_code){
 	var NON_TYPE_DECL_KWDS = ['module', 'open', 'record'];
 
@@ -144,11 +147,31 @@ var AgdaParsing = function (utils) {
 			j < toks[i].length && (keep_going = toks[i][j] == top_level_name);
 			j++, top_level_toks.push(toks[i][j]));
 		}
-		top_level_defs[top_level_name] = top_level_toks;
+		top_level_defs[top_level_name] = new AgdaTypeDecl(top_level_name, top_level_toks);
 	    }
 	}
     };
 
-    return {};
+    // data ctor_rval = Either Error AdgaTypeFormer
+    // string -> ((string, AdgaTypeFormer) -> ())
+    //   -> (Error -> ()) -> Map string [Either ctor_rval [Map string ctor_rval]]
+    // where the functions are applied on each element of the maps
+    var forEachType = function(source_code, map_fn, on_error) {
+	// data ctor_rval = Either Error AdgaTypeFormer
+	// string -> Map string [Either ctor_rval [Map string ctor_rval]]
+	var decls = getTopLevelDefs(source_code);
+	for(decl in decls) {
+	    
+	}
+    }
+
+    // Victoriously, I hold the fork
+    // with a neat bundle of noodles;
+    // forgetting the spaghetti on the plate.
+    return {
+	parseAgda: getTopLevelDefs,
+	typeFormers: AdgaTypeFormers,
+	TypeDecl: AdgaTypeDecl
+    };
 
 };
